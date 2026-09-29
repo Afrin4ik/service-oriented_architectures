@@ -1,0 +1,6 @@
+services:
+  catalog:
+    build:
+      context: ./services/catalog
+    ports:
+      - "127.0.0.1:8000:8000"
