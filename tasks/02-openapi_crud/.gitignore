@@ -1,0 +1,6 @@
+.venv/
+generated/
+.pytest_cache/
+.ruff_cache/
+.env
+*.log

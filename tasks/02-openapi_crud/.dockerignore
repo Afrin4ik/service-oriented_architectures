@@ -1,0 +1,8 @@
+.venv
+generated
+__pycache__
+.pytest_cache
+.ruff_cache
+.env
+*.log
+.DS_Store

@@ -1,0 +1,13 @@
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+pydantic>=2.10,<3
+SQLAlchemy>=2.0.40,<2.1
+psycopg[binary]>=3.2,<4
+PyJWT>=2.10,<3
+pwdlib[argon2]>=0.3,<1
+PyYAML>=6,<7
+datamodel-code-generator>=0.35,<0.36
+openapi-spec-validator>=0.7,<0.8
+httpx>=0.28,<0.29
+pytest>=8,<9
+ruff>=0.11,<1

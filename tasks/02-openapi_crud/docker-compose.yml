@@ -1,0 +1,64 @@
+name: soa-task02
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marketplace}
+    ports:
+      - '127.0.0.1:${DB_PORT:-5433}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U marketplace -d marketplace']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  migrate:
+    image: redgate/flyway:11.20.0
+    platform: linux/amd64
+    command: [-connectRetries=30, migrate]
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/marketplace
+      FLYWAY_USER: marketplace
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-marketplace}
+      FLYWAY_CLEAN_DISABLED: 'true'
+    volumes:
+      - ./db/migration:/flyway/sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://marketplace:${POSTGRES_PASSWORD:-marketplace}@db:5432/marketplace
+      JWT_SECRET: ${JWT_SECRET:-local-coursework-secret-change-me-32-characters}
+      ORDER_INTERVAL_MINUTES: ${ORDER_INTERVAL_MINUTES:-1}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-AdminPass123}
+    ports:
+      - '127.0.0.1:${API_PORT:-8000}:8000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://localhost:8000/health")']
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  tests:
+    profiles: [test]
+    build: .
+    command: [python, -m, pytest, -q]
+    environment:
+      DATABASE_URL: postgresql+psycopg://marketplace:${POSTGRES_PASSWORD:-marketplace}@db:5432/marketplace_test
+      JWT_SECRET: test-secret-at-least-32-characters-for-jwt
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: AdminPass123
+      ORDER_INTERVAL_MINUTES: '1'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+volumes:
+  postgres_data:
