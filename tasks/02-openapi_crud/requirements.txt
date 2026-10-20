@@ -7,6 +7,7 @@ annotated-types==0.8.0
 anyio==4.15.1
     # via
     #   httpx
+    #   httpx2
     #   starlette
 argcomplete==3.7.2
     # via datamodel-code-generator
@@ -42,15 +43,21 @@ genson==1.4.0
 h11==0.16.0
     # via
     #   httpcore
+    #   httpcore2
     #   uvicorn
 httpcore==1.0.9
     # via httpx
+httpcore2==2.15.1
+    # via httpx2
 httpx==0.28.1
+    # via -r requirements.in
+httpx2==2.15.1
     # via -r requirements.in
 idna==3.20
     # via
     #   anyio
     #   httpx
+    #   httpx2
     #   requests
 inflect==7.5.0
     # via datamodel-code-generator
@@ -146,12 +153,17 @@ sqlalchemy==2.0.55
     # via -r requirements.in
 starlette==1.9.0
     # via fastapi
+truststore==0.10.5
+    # via
+    #   httpcore2
+    #   httpx2
 typeguard==4.6.0
     # via inflect
 typing-extensions==4.16.0
     # via
     #   anyio
     #   fastapi
+    #   httpx2
     #   opentelemetry-api
     #   psycopg
     #   pydantic

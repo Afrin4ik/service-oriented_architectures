@@ -232,16 +232,3 @@ Makefile
 requirements.in
 requirements.txt
 ```
-
-## Что объяснять на защите
-
-1. **Contract-first и code-first**: здесь сначала описывается OpenAPI, затем из него генерируются типы и хэндлеры; `/openapi.json` возвращает этот же контракт
-2. **Транзакция и уровень READ COMMITTED**: атомарность даёт общий commit/rollback, а `FOR UPDATE` защищает конкретные проверки остатков и лимитов от гонок
-3. **Почему недостаточно обычного SELECT**: два запроса могут одновременно увидеть один остаток; блокировка заставляет второй дождаться и прочитать уже изменённую строку
-4. **NUMERIC и Decimal**: расчёт стоимости не использует двоичную арифметику float; JSON-число появляется только при сериализации ответа
-5. **Снапшот цены**: цена позиции сохраняется в order_items и не зависит от будущих изменений products.price
-6. **JWT и refresh**: подпись проверяет подлинность claims, `exp` ограничивает срок, `type` разделяет назначение токенов, ротация запрещает повторное использование refresh token
-7. **Роли и владение**: роль разрешает класс операций, сравнение seller_id/user_id ограничивает доступ к конкретной записи
-8. **Flyway**: версии и контрольные суммы миграций хранятся в flyway_schema_history; миграции не выполняются через ORM create_all
-
-Основные источники: [генерация Pydantic-моделей из OpenAPI](https://github.com/datamodel-code-generator/datamodel-code-generator), [блокировки PostgreSQL](https://www.postgresql.org/docs/current/explicit-locking.html), [PyJWT](https://pyjwt.readthedocs.io/en/stable/usage.html), [Flyway CLI и Docker](https://documentation.red-gate.com/flyway/reference/usage/command-line)

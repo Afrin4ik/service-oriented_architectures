@@ -24,8 +24,9 @@ services:
       FLYWAY_USER: marketplace
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-marketplace}
       FLYWAY_CLEAN_DISABLED: 'true'
+      FLYWAY_LOCATIONS: filesystem:/migrations
     volumes:
-      - ./db/migration:/flyway/sql:ro
+      - ./db/migration:/migrations:ro
     depends_on:
       db:
         condition: service_healthy
