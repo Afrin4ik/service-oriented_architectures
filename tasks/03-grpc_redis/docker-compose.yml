@@ -1,0 +1,162 @@
+name: flight-booking
+
+x-python: &python
+  image: flight-booking-python:local
+  build: .
+  init: true
+  restart: unless-stopped
+
+x-flight-env: &flight-env
+  GRPC_API_KEY: ${GRPC_API_KEY:-local-flight-booking-api-key-change-me}
+  REDIS_SENTINELS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+  REDIS_MASTER_NAME: flight-cache
+  CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+
+x-booking-env: &booking-env
+  GRPC_API_KEY: ${GRPC_API_KEY:-local-flight-booking-api-key-change-me}
+  FLIGHT_GRPC_TARGET: flight:50051
+  GRPC_TIMEOUT_SECONDS: ${GRPC_TIMEOUT_SECONDS:-1}
+  RETRY_BACKOFF_SECONDS: ${RETRY_BACKOFF_SECONDS:-0.1}
+  CB_FAILURE_THRESHOLD: ${CB_FAILURE_THRESHOLD:-5}
+  CB_RESET_SECONDS: ${CB_RESET_SECONDS:-10}
+  CB_WINDOW_SECONDS: ${CB_WINDOW_SECONDS:-30}
+  RECOVERY_INTERVAL_SECONDS: ${RECOVERY_INTERVAL_SECONDS:-2}
+  RECOVERY_GRACE_SECONDS: ${RECOVERY_GRACE_SECONDS:-30}
+
+x-redis: &redis
+  image: redis:7.4.6-alpine
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 2s
+    timeout: 1s
+    retries: 30
+
+x-sentinel: &sentinel
+  <<: *redis
+  entrypoint: ["sh", "/etc/redis/start-sentinel.sh"]
+  volumes:
+    - ./redis/start-sentinel.sh:/etc/redis/start-sentinel.sh:ro
+  depends_on:
+    redis-primary:
+      condition: service_healthy
+    redis-replica:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+    interval: 2s
+    timeout: 1s
+    retries: 30
+
+services:
+  flight-db:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flights
+      POSTGRES_USER: flight
+      POSTGRES_PASSWORD: ${FLIGHT_DB_PASSWORD:-flight-local-password}
+    volumes:
+      - flight-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flight -d flights"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  booking-db:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bookings
+      POSTGRES_USER: booking
+      POSTGRES_PASSWORD: ${BOOKING_DB_PASSWORD:-booking-local-password}
+    volumes:
+      - booking-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking -d bookings"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  redis-primary:
+    <<: *redis
+    command: ["redis-server", "--replica-announce-ip", "redis-primary", "--appendonly", "no", "--save", ""]
+
+  redis-replica:
+    <<: *redis
+    command: ["redis-server", "--replicaof", "redis-primary", "6379", "--replica-announce-ip", "redis-replica", "--appendonly", "no", "--save", ""]
+    depends_on:
+      redis-primary:
+        condition: service_healthy
+
+  sentinel-1:
+    <<: *sentinel
+    environment:
+      SENTINEL_HOSTNAME: sentinel-1
+  sentinel-2:
+    <<: *sentinel
+    environment:
+      SENTINEL_HOSTNAME: sentinel-2
+  sentinel-3:
+    <<: *sentinel
+    environment:
+      SENTINEL_HOSTNAME: sentinel-3
+
+  flight:
+    <<: *python
+    command: ["python", "-m", "flight.main"]
+    environment:
+      <<: *flight-env
+      DATABASE_URL: postgresql+psycopg://flight:${FLIGHT_DB_PASSWORD:-flight-local-password}@flight-db:5432/flights
+    depends_on:
+      flight-db:
+        condition: service_healthy
+      sentinel-1:
+        condition: service_healthy
+      sentinel-2:
+        condition: service_healthy
+      sentinel-3:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "scripts.health", "flight"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  booking:
+    <<: *python
+    ports:
+      - "127.0.0.1:${BOOKING_PORT:-8003}:8000"
+    environment:
+      <<: *booking-env
+      DATABASE_URL: postgresql+psycopg://booking:${BOOKING_DB_PASSWORD:-booking-local-password}@booking-db:5432/bookings
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      flight:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "scripts.health", "booking"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  tests:
+    <<: *python
+    restart: "no"
+    profiles: ["test"]
+    command: ["python", "-m", "pytest", "-v"]
+    environment:
+      <<: [*flight-env, *booking-env]
+      TESTING: "1"
+      DATABASE_URL: postgresql+psycopg://booking:${BOOKING_DB_PASSWORD:-booking-local-password}@booking-db:5432/bookings
+      FLIGHT_DATABASE_URL: postgresql+psycopg://flight:${FLIGHT_DB_PASSWORD:-flight-local-password}@flight-db:5432/flights
+      BOOKING_URL: http://booking:8000
+    depends_on:
+      booking:
+        condition: service_healthy
+
+volumes:
+  flight-data:
+  booking-data:
